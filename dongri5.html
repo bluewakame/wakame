@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <!-- ヘッダー部分はそのままです -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>ワカメのどんぐりキャッチ</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+            touch-action: manipulation;
+            user-select: none; /* テキスト選択を無効にする */
+            -webkit-user-select: none; /* Safari用 */
+        }
+        .game-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+        .character {
+            position: absolute;
+            bottom: 20%;
+            left: 0;
+            width: 15vw;
+            transition: width 0.2s;
+        }
+        .falling-object {
+            position: absolute;
+            top: 0;
+            width: 10vw;
+            max-width: 80px;
+        }
+        /* スコアボードとタイムボードを左寄せにし、文字を小さくします */
+        .game-info {
+            display: flex;
+            justify-content: flex-start; /* 左寄せ */
+            position: absolute;
+            top: 5%;
+            left: 5%; /* 左端からの距離を設定 */
+            width: auto;
+            flex-direction: row;
+        }
+        .score-board, .time-board {
+            display: block;
+            text-align: left; /* 左寄せ */
+            font-size: 4vw;   /* フォントサイズを小さく */
+            font-weight: bold;
+            color: #333;
+            padding: 0 10px;
+            user-select: none; /* テキスト選択を無効にする */
+            -webkit-user-select: none; /* Safari用 */
+        }
+        .score-board {
+            margin-right: 20px; /* スコアとタイムの間にスペースを追加 */
+        }
+
+        /* ゲームオーバーのスタイルを調整 */
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 3vw; /* フォントサイズを小さくしました */
+            font-weight: bold;
+            color: red;
+            white-space: pre-wrap; /* 改行を有効にする */
+            user-select: none; /* テキスト選択を無効にする */
+            -webkit-user-select: none; /* Safari用 */
+        }
+
+        /* リトライボタンのスタイルを追加 */
+        .retry-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 2vw;
+            font-weight: bold;
+            color: #fff;
+            background-color: #333;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        @media (max-width: 768px) {
+            .retry-button {
+                font-size: 4vw;
+            }
+        }
+        @media (max-width: 480px) {
+            .retry-button {
+                font-size: 6vw;
+            }
+        }
+
+        /* "-1" のテキストスタイル */
+        .minus-one {
+            position: absolute;
+            color: red;
+            font-size: 4vw;
+            font-weight: bold;
+            animation: fadeOut 1s forwards;
+            z-index: 1000; /* キャラクターの上に表示するため */
+            user-select: none; /* テキスト選択を無効にする */
+            -webkit-user-select: none; /* Safari用 */
+        }
+
+        @keyframes fadeOut {
+            0% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-50px); }
+        }
+
+        /* スマホ用のボタン */
+        .controls {
+            display: none;
+            position: absolute;
+            bottom: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100vw;
+            text-align: center;
+        }
+        .controls button {
+            width: 25vw;
+            height: 8vh;
+            margin: 0 5vw;
+            font-size: 4vw;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            touch-action: manipulation;
+            user-select: none; /* テキスト選択を無効にする */
+            -webkit-user-select: none; /* Safari用 */
+        }
+
+        /* メディアクエリでスマホ対応 */
+        @media (max-width: 768px) {
+            .controls {
+                display: block;
+            }
+            .character {
+                width: 20vw;
+            }
+            .falling-object {
+                width: 12vw;
+            }
+            .score-board, .time-board {
+                font-size: 6vw; /* フォントサイズを調整 */
+            }
+            .game-over {
+                font-size: 5vw; /* フォントサイズを小さくしました */
+            }
+        }
+
+        @media (max-width: 480px) {
+            .character {
+                width: 25vw;
+            }
+            .falling-object {
+                width: 15vw;
+            }
+            .score-board, .time-board {
+                font-size: 8vw; /* フォントサイズを調整 */
+            }
+            .game-over {
+                font-size: 6vw; /* フォントサイズを小さくしました */
+            }
+
+            .falling-object {
+                position: absolute;
+                top: 0;
+                width: 10vw;
+                max-width: 80px;
+            }
+        }
+    </style>
+    <!-- Firebase SDKの読み込み -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database.js"></script>
+
+   <script type="module">
+    // Import the functions you need from the SDKs you need
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-analytics.js";
+    // TODO: Add SDKs for Firebase products that you want to use
+    // https://firebase.google.com/docs/web/setup#available-libraries
+  
+    // Your web app's Firebase configuration
+    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+    const firebaseConfig = {
+      apiKey: "AIzaSyBMzxUa8i908sQ5uUTi2GkFDX9vGzYOoIU",
+      authDomain: "donguricatchgame.firebaseapp.com",
+      databaseURL: "https://donguricatchgame-default-rtdb.firebaseio.com",
+      projectId: "donguricatchgame",
+      storageBucket: "donguricatchgame.appspot.com",
+      messagingSenderId: "1015204488201",
+      appId: "1:1015204488201:web:0b6dd91f691d27964204d8",
+      measurementId: "G-D9T48WTQX4"
+    };
+  
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+
+    // Firebaseの初期化
+    firebase.initializeApp(firebaseConfig);
+  </script>
+
+   
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-info">
+            <!-- スコアボード -->
+            <div id="scoreBoard" class="score-board">スコア: 0（30でクリア）</div>
+            <!-- タイムボード -->
+            <div id="timeBoard" class="time-board">タイム: 00:00</div>
+        </div>
+        <!-- キャラクター -->
+        <img id="character" src="http://dongri.cutegirl.jp/wordpress/wp-content/uploads/2024/10/wakame.png" alt="キャラクター" class="character">
+
+        <!-- スマホ用の操作ボタン -->
+        <div class="controls">
+            <button id="leftButton">← 左</button>
+            <button id="rightButton">右 →</button>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        const character = document.getElementById('character');
+        const scoreBoard = document.getElementById('scoreBoard');
+        const timeBoard = document.getElementById('timeBoard'); // タイムボードの要素を取得
+        const leftButton = document.getElementById('leftButton');
+        const rightButton = document.getElementById('rightButton');
+        const gameContainer = document.querySelector('.game-container');
+
+        let characterPosition = 0; // 初期位置を左端に設定
+        character.style.left = characterPosition + 'px';
+
+        let score = 0;
+        const targetScore = 30; // 目標スコアを30に設定
+
+        // Firebase Realtime Databaseの参照を取得
+        const database = firebase.database();
+        const scoresRef = database.ref('scores');
+
+        // スコアを保存する関数を定義
+        function saveScore(username, score, time) {
+        const newScoreRef = scoresRef.push();
+        newScoreRef.set({
+            username: username,
+            score: score,
+            time: time
+        });
+        }
+
+
+        // タイマーの開始時間を記録
+        let startTime = Date.now();
+
+        // 落下速度の範囲を指定
+        const minSpeed = 2; // 最小速度
+        const maxSpeed = 8; // 最大速度
+
+        // 落下物を格納する配列
+        let fallingObjects = [];
+
+        // キャラクターの移動速度
+        const moveSpeed = 5;
+
+        // タッチ移動のための変数
+        let leftInterval;
+        let rightInterval;
+
+        // キャラクターの移動（矢印キー）
+        function handleKeyDown(e) {
+            if (e.key === 'ArrowLeft') {
+                moveCharacter(-20);
+            } else if (e.key === 'ArrowRight') {
+                moveCharacter(20);
+            }
+        }
+        window.addEventListener('keydown', handleKeyDown);
+
+        // スマホ用のボタン操作（長押し対応）
+        leftButton.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // デフォルトの動作を無効化
+            startMovingLeft();
+        });
+        leftButton.addEventListener('touchend', (e) => {
+            e.preventDefault(); // デフォルトの動作を無効化
+            stopMovingLeft();
+        });
+        leftButton.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); // コンテキストメニューを無効化
+        });
+        leftButton.addEventListener('touchcancel', stopMovingLeft);
+
+        rightButton.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // デフォルトの動作を無効化
+            startMovingRight();
+        });
+        rightButton.addEventListener('touchend', (e) => {
+            e.preventDefault(); // デフォルトの動作を無効化
+            stopMovingRight();
+        });
+        rightButton.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); // コンテキストメニューを無効化
+        });
+        rightButton.addEventListener('touchcancel', stopMovingRight);
+
+        function startMovingLeft() {
+            moveCharacter(-20); // 最初の移動
+            leftInterval = setInterval(() => {
+                moveCharacter(-moveSpeed);
+            }, 50); // 50msごとに移動
+        }
+
+        function stopMovingLeft() {
+            clearInterval(leftInterval);
+        }
+
+        function startMovingRight() {
+            moveCharacter(20); // 最初の移動
+            rightInterval = setInterval(() => {
+                moveCharacter(moveSpeed);
+            }, 50); // 50msごとに移動
+        }
+
+        function stopMovingRight() {
+            clearInterval(rightInterval);
+        }
+
+        // キャラクターを移動させる関数
+        function moveCharacter(distance) {
+            let characterWidth = character.offsetWidth; // 常に最新のキャラクター幅を取得
+            characterPosition += distance;
+
+            // 画面端の制限を適用
+            if (characterPosition < 0) {
+                characterPosition = 0; // 左端に制限
+            } else if (characterPosition > gameContainer.offsetWidth - characterWidth) {
+                characterPosition = gameContainer.offsetWidth - characterWidth; // 右端に制限
+            }
+
+            character.style.left = characterPosition + 'px';
+        }
+
+        // 落下物を生成する関数
+        function createFallingObject() {
+            // 落下物の種類をランダムに決定
+            let objectType;
+            let randomNum = Math.random();
+            if (randomNum < 0.8) {
+                // 80%の確率でどんぐり
+                objectType = 'acorn';
+            } else {
+                // 20%の確率で毛虫
+                objectType = 'caterpillar';
+            }
+
+            // 画像要素を作成
+            let objectElement = document.createElement('img');
+            objectElement.classList.add('falling-object');
+            objectElement.style.position = 'absolute';
+            objectElement.style.top = '0px';
+
+            // 画像ソースと alt を設定
+            if (objectType === 'acorn') {
+                objectElement.src = 'http://dongri.cutegirl.jp/wordpress/wp-content/uploads/2024/10/a8a15724aa60a5309b4a732d6e50ae17.png';
+                objectElement.alt = 'どんぐり';
+            } else if (objectType === 'caterpillar') {
+                objectElement.src = 'http://dongri.cutegirl.jp/wordpress/wp-content/uploads/2024/10/kemushi.png';
+                objectElement.alt = '毛虫';
+            }
+
+            // 要素を先に DOM に追加
+            gameContainer.appendChild(objectElement);
+
+            // 要素の幅を正確に取得
+            let objectWidth = objectElement.offsetWidth;
+
+            // 初期位置を計算
+            let objectLeft = Math.random() * (gameContainer.offsetWidth - objectWidth);
+            objectElement.style.left = objectLeft + 'px';
+
+            // ランダムな速度を設定
+            let speed = Math.random() * (maxSpeed - minSpeed) + minSpeed;
+
+            // 落下物のオブジェクトを作成
+            let fallingObject = {
+                element: objectElement,
+                type: objectType,
+                speed: speed,
+                top: 0,
+            };
+
+            // 配列に追加
+            fallingObjects.push(fallingObject);
+        }
+
+        // 落下物を更新する関数
+        function updateFallingObjects() {
+            for (let i = 0; i < fallingObjects.length; i++) {
+                let obj = fallingObjects[i];
+                // 落下させる
+                obj.top += obj.speed;
+                obj.element.style.top = obj.top + 'px';
+
+                // 衝突判定
+                if (checkCollision(character, obj.element)) {
+                    // 落下物を削除
+                    gameContainer.removeChild(obj.element);
+                    fallingObjects.splice(i, 1);
+                    i--; // インデックスを調整
+
+                    // スコアを更新
+                    if (obj.type === 'acorn') {
+                        updateScore(1);
+                    } else if (obj.type === 'caterpillar') {
+                        updateScore(-1);
+                        showMinusOne(); // "-1" を表示
+                    }
+
+                    continue;
+                }
+
+                // 画面下に到達したら削除
+                if (obj.top > gameContainer.offsetHeight) {
+                    gameContainer.removeChild(obj.element);
+                    fallingObjects.splice(i, 1);
+                    i--; // インデックスを調整
+                }
+            }
+        }
+
+        // "-1" を表示する関数
+        function showMinusOne() {
+            const minusOneText = document.createElement('div');
+            minusOneText.classList.add('minus-one');
+            minusOneText.textContent = '-1';
+
+            // キャラクターの位置を取得
+            const characterRect = character.getBoundingClientRect();
+            const gameContainerRect = gameContainer.getBoundingClientRect();
+
+            // ゲームコンテナ内での相対位置を計算
+            const leftPosition = characterRect.left - gameContainerRect.left + characterRect.width / 2 - 10; // 調整が必要
+            const topPosition = characterRect.top - gameContainerRect.top - 30; // 調整が必要
+
+            minusOneText.style.left = leftPosition + 'px';
+            minusOneText.style.top = topPosition + 'px';
+
+            gameContainer.appendChild(minusOneText);
+
+            // アニメーション終了後に削除
+            minusOneText.addEventListener('animationend', () => {
+                minusOneText.remove();
+            });
+        }
+
+        // スコアを更新
+        function updateScore(delta) {
+            score += delta;
+            if (score < 0) score = 0; // スコアが負にならないように
+            scoreBoard.textContent = 'スコア: ' + score;
+
+            if (score >= targetScore) {
+                gameOver();
+            }
+        }
+
+        // 経過時間を更新する関数（分：秒形式）
+        function updateTime() {
+            const currentTime = Date.now();
+            const totalSeconds = Math.floor((currentTime - startTime) / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+
+            // 分と秒を2桁にフォーマット
+            const formattedMinutes = String(minutes).padStart(2, '0');
+            const formattedSeconds = String(seconds).padStart(2, '0');
+
+            timeBoard.textContent = `タイム: ${formattedMinutes}:${formattedSeconds}`;
+        }
+
+        // ゲームクリア
+        function gameOver() {
+            const endTime = Date.now();
+            const totalSeconds = Math.floor((endTime - startTime) / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+
+            // 分と秒を2桁にフォーマット
+            const formattedMinutes = String(minutes).padStart(2, '0');
+            const formattedSeconds = String(seconds).padStart(2, '0');
+
+            // タイムボードを更新
+            timeBoard.textContent = `タイム: ${formattedMinutes}:${formattedSeconds}`;
+
+            const gameOverMessage = document.createElement('div');
+            gameOverMessage.classList.add('game-over');
+            gameOverMessage.textContent = `ゲームクリア！\nクリアタイム: ${formattedMinutes}:${formattedSeconds}`;
+
+            // リトライボタンを作成
+            const retryButton = document.createElement('button');
+            retryButton.textContent = 'リトライ';
+            retryButton.classList.add('retry-button');
+            retryButton.addEventListener('click', restartGame);
+
+            // ゲームオーバーメッセージにボタンを追加
+            gameOverMessage.appendChild(document.createElement('br')); // 改行
+            gameOverMessage.appendChild(retryButton);
+
+            document.querySelector('.game-container').appendChild(gameOverMessage);
+
+            window.removeEventListener('keydown', handleKeyDown);
+            clearInterval(gameInterval);
+            clearInterval(createObjectInterval);
+            clearInterval(timeInterval); // タイマーの更新を停止
+        }
+        // ユーザー名を取得（例としてプロンプトを使用）
+        let username = prompt('あなたの名前を入力してください:');
+
+        // スコアを保存
+        const totalTimeInSeconds = totalSeconds; // totalSecondsは経過時間を秒で表した変数
+        saveScore(username, score, totalTimeInSeconds);
+
+        // 上位3名のスコアを取得して表示
+        getTopScores(displayTopScores);
+        // ゲームを再スタートする関数
+        function restartGame() {
+            // スコアをリセット
+            score = 0;
+            scoreBoard.textContent = 'スコア: 0';
+
+            // タイマーをリセット
+            startTime = Date.now();
+            updateTime(); // タイムボードをリセット
+
+            // 既存の落下物をすべて削除
+            for (let i = 0; i < fallingObjects.length; i++) {
+                gameContainer.removeChild(fallingObjects[i].element);
+            }
+            fallingObjects = [];
+
+            // ゲームオーバーのメッセージを削除
+            const gameOverMessage = document.querySelector('.game-over');
+            if (gameOverMessage) {
+                gameOverMessage.remove();
+            }
+
+            // キャラクターの位置をリセット
+            characterPosition = 0;
+            character.style.left = characterPosition + 'px';
+
+            // イベントリスナーを再度追加
+            window.addEventListener('keydown', handleKeyDown);
+
+            // ゲームループを再開
+            gameInterval = setInterval(updateFallingObjects, 20);
+            createObjectInterval = setInterval(createFallingObject, 1000);
+            timeInterval = setInterval(updateTime, 100);
+
+            // 最初の落下物を生成
+            createFallingObject();
+        }
+
+        // 衝突判定
+        function checkCollision(character, object) {
+            const characterRect = character.getBoundingClientRect();
+            const objectRect = object.getBoundingClientRect();
+
+            return !(
+                characterRect.top > objectRect.bottom ||
+                characterRect.bottom < objectRect.top ||
+                characterRect.left > objectRect.right ||
+                characterRect.right < objectRect.left
+            );
+        }
+
+        function getTopScores(callback) {
+        scoresRef.orderByChild('time').limitToFirst(3).once('value', (snapshot) => {
+            const topScores = [];
+            snapshot.forEach((childSnapshot) => {
+            const data = childSnapshot.val();
+            topScores.push({
+                username: data.username,
+                score: data.score,
+                time: data.time
+            });
+            });
+            callback(topScores);
+        });
+        }
+
+        function displayTopScores(topScores) {
+        const scoreList = document.createElement('ol');
+        for (let i = 0; i < topScores.length; i++) {
+            const scoreItem = document.createElement('li');
+            scoreItem.textContent = `${topScores[i].username}: ${topScores[i].time}秒`;
+            scoreList.appendChild(scoreItem);
+        }
+        const gameOverMessage = document.querySelector('.game-over');
+        gameOverMessage.appendChild(document.createElement('br')); // 改行
+        gameOverMessage.appendChild(document.createTextNode('トップ3:'));
+        gameOverMessage.appendChild(scoreList);
+        }
+
+
+
+
+        // ゲームループ
+        let gameInterval = setInterval(updateFallingObjects, 20);
+
+        // 一定間隔で落下物を生成
+        let createObjectInterval = setInterval(createFallingObject, 1000); // 毎秒1つ生成
+
+        // 経過時間を更新するインターバルを設定
+        let timeInterval = setInterval(updateTime, 100); // 0.1秒ごとに更新
+
+        // ゲーム開始
+        createFallingObject(); // すぐに最初の落下物を生成
+
+    </script>
+</body>
+</html>
